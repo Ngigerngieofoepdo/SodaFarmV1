@@ -1,0 +1,148 @@
+-- Load the external script
+loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Universal-Sword-reach-7331"))()
+
+-- Variables
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local backpack = player:WaitForChild("Backpack")
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local TweenService = game:GetService("TweenService")
+
+-- Function to equip the first tool in the backpack
+local function equipItem()
+    local tools = backpack:GetChildren()
+    for _, item in ipairs(tools) do
+        if item:IsA("Tool") then
+            item.Parent = character -- Move the item to the character to equip it
+            print("Equipped: " .. item.Name)
+            return -- Exit after equipping the first found tool
+        end
+    end
+    print("No tool found in backpack to equip.")
+end
+
+equipItem() -- Call the function to equip the item
+
+-- Tweening setup
+local walkingSpeed = 17 -- Normal walking speed in studs per second
+local verticalOffset = 9 -- Height to move up in studs
+local descendSpeed = 24 -- Speed in studs per second for descending
+local returnSpeed = 17 -- Speed in studs per second for returning to spawn
+
+-- Function to collect all models in the workspace
+local function collectAllModels()
+    for _, item in ipairs(workspace:GetChildren()) do
+        if item:IsA("Model") then
+            print("Found model: " .. item.Name)
+        end
+    end
+    
+    print("All models in the workspace have been collected.")
+end
+
+-- Function to walk to OrbTemplates in Terrain
+local function walkToOrbTemplates()
+    local orbTemplates = workspace.Terrain:GetChildren()
+    
+    for _, child in ipairs(orbTemplates) do
+        if child.Name == "OrbTemplate" and child:IsA("Model") and child.PrimaryPart then
+            local targetPosition = child.PrimaryPart.Position
+            
+            -- Move horizontally to the target position
+            local horizontalPosition = Vector3.new(targetPosition.X, humanoidRootPart.Position.Y, targetPosition.Z)
+            local distance = (horizontalPosition - humanoidRootPart.Position).Magnitude
+            local horizontalDuration = distance / walkingSpeed
+            
+            local moveToTween = TweenService:Create(humanoidRootPart, TweenInfo.new(horizontalDuration), {CFrame = CFrame.new(horizontalPosition)})
+            moveToTween:Play()
+            moveToTween.Completed:Wait()
+            
+            -- Tween down to the OrbTemplate position
+            local descendDuration = verticalOffset / descendSpeed
+            local tweenDown = TweenService:Create(humanoidRootPart, TweenInfo.new(descendDuration), {CFrame = CFrame.new(targetPosition)})
+            tweenDown:Play()
+            tweenDown.Completed:Wait()
+            
+            -- Simulate picking up the object
+            print("Picked up OrbTemplate: " .. child.Name)
+            wait(1.5) -- Delay after picking up
+
+            -- Ascend after collecting the orb
+            local ascendPosition = humanoidRootPart.Position + Vector3.new(0, verticalOffset, 0)
+            local ascendDuration = verticalOffset / descendSpeed
+            local ascendTween = TweenService:Create(humanoidRootPart, TweenInfo.new(ascendDuration), {CFrame = CFrame.new(ascendPosition)})
+            ascendTween:Play()
+            ascendTween.Completed:Wait()
+        end
+    end
+    print("Tweened to all OrbTemplates in Terrain.")
+end
+
+-- Function to target players with tools starting with "+" and not standing on "Plate"
+local function targetPlayersWithPlusTool()
+    local players = game.Players:GetPlayers()
+    local platePart = workspace.Terrain.Spawn:FindFirstChild("Plate")
+
+    for _, otherPlayer in ipairs(players) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local tools = otherPlayer.Backpack:GetChildren()
+            local isOnPlate = platePart and (otherPlayer.Character.HumanoidRootPart.Position - platePart.Position).Magnitude < 1
+
+            if not isOnPlate then
+                for _, tool in ipairs(tools) do
+                    if tool:IsA("Tool") and tool.Name:sub(1, 1) == "+" then
+                        -- Target the player
+                        local targetPosition = otherPlayer.Character.HumanoidRootPart.Position
+                        local distance = (targetPosition - humanoidRootPart.Position).Magnitude
+                        local targetDuration = distance / walkingSpeed
+                        
+                        local moveToTween = TweenService:Create(humanoidRootPart, TweenInfo.new(targetDuration), {CFrame = CFrame.new(targetPosition)})
+                        moveToTween:Play()
+                        moveToTween.Completed:Wait()
+
+                        print("Targeted player: " .. otherPlayer.Name .. " with tool: " .. tool.Name)
+                        break -- Exit after targeting one tool
+                    end
+                end
+            else
+                print("Not targeting " .. otherPlayer.Name .. " because they are on the Plate.")
+            end
+        end
+    end
+end
+
+-- Function to return to SpawnLocation
+local function returnToSpawn()
+    local spawnLocation = workspace.Terrain.Spawn.SpawnLocation
+    if spawnLocation then
+        local returnPosition = Vector3.new(spawnLocation.Position.X, humanoidRootPart.Position.Y, spawnLocation.Position.Z)
+        local distanceToSpawn = (humanoidRootPart.Position - returnPosition).Magnitude
+        local returnDuration = distanceToSpawn / returnSpeed
+        
+        local returnTween = TweenService:Create(humanoidRootPart, TweenInfo.new(returnDuration), {CFrame = CFrame.new(returnPosition)})
+        returnTween:Play()
+
+        while returnTween.PlaybackState ~= Enum.PlaybackState.Completed do
+            wait(0.1)
+            if (humanoidRootPart.Position - returnPosition).Magnitude < 1 then
+                returnTween:Cancel()
+                humanoidRootPart.CFrame = CFrame.new(returnPosition)
+                print("Stopped tweening and reached SpawnLocation.")
+                return
+            end
+        end
+        
+        print("Returned to SpawnLocation.")
+    else
+        print("SpawnLocation not found.")
+    end
+end
+
+-- Call the function to collect all models
+collectAllModels()
+-- After collecting models, walk to all OrbTemplates
+walkToOrbTemplates()
+-- Target players with tools starting with "+" and not on "Plate"
+targetPlayersWithPlusTool()
+-- Return to SpawnLocation after collecting all orbs
+returnToSpawn()
